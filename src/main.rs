@@ -27,7 +27,7 @@ fn main() {
             Arg::new("metrics")
                 .long("metrics")
                 .takes_value(true)
-                .help("Compute metrics for the given file"),
+                .help("Compute metrics for the given file by simulating a run"),
         )
         .get_matches();
 
@@ -50,8 +50,7 @@ fn main() {
         }
     } else if let Some(file) = matches.value_of("metrics") {
         if Path::new(file).exists() {
-            let code = fs::read_to_string(file).expect("Unable to read file");
-            metrics::compute_metrics(&code);
+            metrics::simulate_run(file);
         } else {
             eprintln!("File does not exist: {}", file);
         }
