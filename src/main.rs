@@ -5,6 +5,7 @@ use std::path::Path;
 mod analyze;
 mod metrics;
 mod refactor;
+mod utils;
 
 fn main() {
     let matches = Command::new("Fakto")
@@ -33,8 +34,7 @@ fn main() {
 
     if let Some(file) = matches.value_of("refactor") {
         if Path::new(file).exists() {
-            let code = fs::read_to_string(file).expect("Unable to read file");
-            let refactored_code = refactor::refactor_code(&code);
+            let refactored_code = refactor::refactor_code(file);
             let refactored_file = format!("{}_refactored.rs", file.trim_end_matches(".rs"));
             fs::write(refactored_file, refactored_code).expect("Unable to write file");
             println!("Refactored code written to: {}", refactored_file);
