@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = "4.0"
+clap = "4.1"
 syn = "2.0"
 quote = "1.0"
+proc-macro2 = "1.0"
