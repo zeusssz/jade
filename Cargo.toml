@@ -1,0 +1,9 @@
+[package]
+name = "fakto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = "4.0"
+syn = "2.0"
+quote = "1.0"
