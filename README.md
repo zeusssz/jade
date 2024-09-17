@@ -1,6 +1,6 @@
 # Jade
 
-Jade is a powerful Rust code refactoring tool designed to enhance code quality and streamline development workflows. It provides functionalities for refactoring Rust code, analyzing files, and simulating code metrics to help developers maintain and improve their codebases efficiently.
+Jade is a Rust code refactoring tool designed to enhance code quality and streamline development workflows. It provides functionalities for refactoring Rust code, analyzing files, and simulating code metrics to help developers maintain and improve their codebases efficiently.
 
 ## Features
 
