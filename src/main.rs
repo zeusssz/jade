@@ -8,7 +8,7 @@ mod refactor;
 mod utils;
 
 fn main() {
-    let matches = Command::new("Fakto")
+    let matches = Command::new("Jade")
         .version("0.1.0")
         .author("zeusssz")
         .about("A Rust code refactoring tool")
@@ -55,6 +55,6 @@ fn main() {
             eprintln!("File does not exist: {}", file);
         }
     } else {
-        eprintln!("No valid command was provided. Use `fakto --help` for usage information.");
+        eprintln!("No valid command was provided. Use `jade --help` for usage information.");
     }
 }
