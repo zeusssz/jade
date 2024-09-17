@@ -1,6 +1,6 @@
-# Fakto
+# Jade
 
-Fakto is a powerful Rust code refactoring tool designed to enhance code quality and streamline development workflows. It provides functionalities for refactoring Rust code, analyzing files, and simulating code metrics to help developers maintain and improve their codebases efficiently.
+Jade is a powerful Rust code refactoring tool designed to enhance code quality and streamline development workflows. It provides functionalities for refactoring Rust code, analyzing files, and simulating code metrics to help developers maintain and improve their codebases efficiently.
 
 ## Features
 
@@ -19,8 +19,8 @@ Ensure that you have Rust and Cargo installed. You can download and install them
 1. **Clone the Repository**
 
    ```sh
-   git clone https://github.com/zeusssz/fakto.git
-   cd fakto
+   git clone https://github.com/zeusssz/jade.git
+   cd jade
    ```
 
 2. **Build the Project**
@@ -29,24 +29,24 @@ Ensure that you have Rust and Cargo installed. You can download and install them
    cargo build --release
    ```
 
-   The compiled binary will be available in `target/release/fakto`.
+   The compiled binary will be available in `target/release/jade`.
 
 3. **(Optional) Install Globally**
 
-   To install Fakto globally, you can use:
+   To install Jade globally, you can use:
 
    ```sh
    cargo install --path .
    ```
 
-   This will allow you to run `fakto` from anywhere on your system.
+   This will allow you to run `jade` from anywhere on your system.
 
 ## Usage
 
-Fakto provides three main commands to interact with your Rust code. Each command follows the syntax:
+Jade provides three main commands to interact with your Rust code. Each command follows the syntax:
 
 ```sh
-fakto [command] [options] [file]
+jade [command] [options] [file]
 ```
 
 ### Commands
@@ -62,7 +62,7 @@ Refactor the specified Rust file. This command performs various refactoring task
 **Usage:**
 
 ```sh
-fakto --refactor path/to/file.rs
+jade --refactor path/to/file.rs
 ```
 
 >[!NOTE]
@@ -79,7 +79,7 @@ Analyze the specified Rust file. This command provides insights and checks relat
 **Usage:**
 
 ```sh
-fakto --analyze path/to/file.rs
+jade --analyze path/to/file.rs
 ```
 
 >[!TIP]
@@ -96,7 +96,7 @@ Compute and simulate metrics for the given Rust file. This command simulates the
 **Usage:**
 
 ```sh
-fakto --metrics path/to/file.rs
+jade --metrics path/to/file.rs
 ```
 
 >[!WARNING]
@@ -109,7 +109,7 @@ fakto --metrics path/to/file.rs
 To refactor a file named `example.rs`, run:
 
 ```sh
-fakto --refactor example.rs
+jade --refactor example.rs
 ```
 
 This command creates a new file `example_refactored.rs` with the refactored code.
@@ -119,7 +119,7 @@ This command creates a new file `example_refactored.rs` with the refactored code
 To analyze `example.rs`, use:
 
 ```sh
-fakto --analyze example.rs
+jade --analyze example.rs
 ```
 
 Review the analysis output for insights and potential improvements.
@@ -129,14 +129,14 @@ Review the analysis output for insights and potential improvements.
 To compute metrics for `example.rs`, execute:
 
 ```sh
-fakto --metrics example.rs
+jade --metrics example.rs
 ```
 
 Check the simulation results for performance metrics and runtime errors.
 
 ## Contributing
 
-Contributions to Fakto are welcome! To contribute:
+Contributions to Jade are welcome! To contribute:
 
 1. Fork the repository on GitHub.
 2. Create a new branch for your feature or bug fix.
