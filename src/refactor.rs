@@ -5,6 +5,7 @@ use crate::utils::{read_code, parse_code};
 pub fn refactor_code(file_path: &str) -> String {
     let code = read_code(file_path);
     let mut file = parse_code(&code);
+
     let mut renamer = IdentifierRenamer::new();
     renamer.visit_file_mut(&mut file);
 
@@ -18,7 +19,7 @@ pub fn refactor_code(file_path: &str) -> String {
 
     simplify_expressions(&mut file);
     reorder_functions(&mut file);
-    let refactored_code = code;
+    let refactored_code = quote::quote!(#file).to_string();
     refactored_code
 }
 
@@ -35,6 +36,7 @@ impl IdentifierRenamer {
             used_identifiers: HashSet::new(),
         }
     }
+    
     fn generate_unique_name(&mut self, base_name: &str) -> String {
         let mut new_name = base_name.to_string();
         let mut counter = 1;
@@ -104,7 +106,19 @@ impl DeadCodeRemover {
     fn mark_used_functions(&mut self, file: &File) {
         for item in &file.items {
             if let Item::Fn(func) = item {
-                self.declared_functions.insert(func.sig.ident.to_string());
+                self.visit_block(&func.block);
+            }
+        }
+    }
+
+    fn visit_block(&mut self, block: &syn::Block) {
+        for stmt in &block.stmts {
+            if let Stmt::Expr(Expr::Call(call_expr)) = stmt {
+                if let Expr::Path(expr_path) = &*call_expr.func {
+                    if let Some(ident) = expr_path.path.get_ident() {
+                        self.used_functions.insert(ident.to_string());
+                    }
+                }
             }
         }
     }
@@ -146,17 +160,19 @@ fn simplify_binary_expression(expr: &mut syn::ExprBinary) {
             let left_value = left_int.base10_parse::<i64>().unwrap_or_default();
             let right_value = right_int.base10_parse::<i64>().unwrap_or_default();
             let result = match expr.op {
-                BinOp::Add(_) => left_value + right_value,
-                BinOp::Sub(_) => left_value - right_value,
-                BinOp::Mul(_) => left_value * right_value,
-                BinOp::Div(_) => left_value / right_value,
-                _ => return,
+                BinOp::Add(_) => Some(left_value + right_value),
+                BinOp::Sub(_) => Some(left_value - right_value),
+                BinOp::Mul(_) => Some(left_value * right_value),
+                BinOp::Div(_) => right_value.checked_div(left_value),
+                _ => None,
             };
-            *expr.left = Box::new(Expr::Lit(syn::ExprLit {
-                attrs: vec![],
-                lit: syn::Lit::Int(syn::LitInt::new(&result.to_string(), expr.span())),
-            }));
-            *expr.right = Box::new(Expr::Lit(syn::LitInt::new("0", expr.span()).into()));
+            if let Some(result) = result {
+                *expr.left = Box::new(Expr::Lit(syn::ExprLit {
+                    attrs: vec![],
+                    lit: syn::Lit::Int(syn::LitInt::new(&result.to_string(), expr.span())),
+                }));
+                *expr.right = Box::new(Expr::Lit(syn::LitInt::new("0", expr.span()).into()));
+            }
         }
     }
 }
@@ -165,9 +181,11 @@ fn simplify_binary_expression(expr: &mut syn::ExprBinary) {
 fn reorder_functions(file: &mut File) {
     file.items.sort_by_key(|item| {
         if let Item::Fn(func) = item {
-            func.sig.ident.to_string()
+            let name = func.sig.ident.to_string();
+            let is_public = !name.starts_with('_');
+            (is_public, name)
         } else {
-            String::new()
+            (true, String::new())
         }
     });
 }
