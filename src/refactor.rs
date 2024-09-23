@@ -2,9 +2,9 @@ use syn::{File, Item, Ident, Stmt, Expr, BinOp, visit_mut::Visit};
 use std::collections::{HashMap, HashSet};
 use crate::utils::{read_code, parse_code};
 
-pub fn refactor_code(file_path: &str) -> String {
-    let code = read_code(file_path);
-    let mut file = parse_code(&code);
+pub fn refactor_code(file_path: &str) -> Result<String, &'static str> {
+    let code = read_code(file_path).ok_or("Failed to read code")?;
+    let mut file = parse_code(&code).ok_or("Failed to parse code")?;
 
     let mut renamer = IdentifierRenamer::new();
     renamer.visit_file_mut(&mut file);
@@ -19,8 +19,9 @@ pub fn refactor_code(file_path: &str) -> String {
 
     simplify_expressions(&mut file);
     reorder_functions(&mut file);
+
     let refactored_code = quote::quote!(#file).to_string();
-    refactored_code
+    Ok(refactored_code)
 }
 
 // --- Identifier Renamer ---
@@ -52,11 +53,10 @@ impl IdentifierRenamer {
 impl VisitMut for IdentifierRenamer {
     fn visit_ident_mut(&mut self, ident: &mut Ident) {
         let ident_str = ident.to_string();
-        if !self.rename_map.contains_key(&ident_str) {
-            let new_name = self.generate_unique_name(&ident_str);
-            self.rename_map.insert(ident_str.clone(), new_name.clone());
-        }
-        *ident = Ident::new(&self.rename_map[&ident_str], ident.span());
+        let new_name = self.rename_map
+            .entry(ident_str.clone())
+            .or_insert_with(|| self.generate_unique_name(&ident_str));
+        *ident = Ident::new(new_name, ident.span());
     }
 }
 
@@ -99,7 +99,6 @@ impl VisitMut for FunctionExtractor {
 #[derive(Default)]
 struct DeadCodeRemover {
     used_functions: HashSet<String>,
-    declared_functions: HashSet<String>,
 }
 
 impl DeadCodeRemover {
@@ -163,7 +162,7 @@ fn simplify_binary_expression(expr: &mut syn::ExprBinary) {
                 BinOp::Add(_) => Some(left_value + right_value),
                 BinOp::Sub(_) => Some(left_value - right_value),
                 BinOp::Mul(_) => Some(left_value * right_value),
-                BinOp::Div(_) => right_value.checked_div(left_value),
+                BinOp::Div(_) => if right_value != 0 { Some(left_value / right_value) } else { None },
                 _ => None,
             };
             if let Some(result) = result {
@@ -179,13 +178,17 @@ fn simplify_binary_expression(expr: &mut syn::ExprBinary) {
 
 // --- Function Reordering ---
 fn reorder_functions(file: &mut File) {
-    file.items.sort_by_key(|item| {
-        if let Item::Fn(func) = item {
-            let name = func.sig.ident.to_string();
-            let is_public = !name.starts_with('_');
-            (is_public, name)
+    file.items.sort_by(|a, b| {
+        let a_is_public = if let Item::Fn(func) = a {
+            !func.sig.ident.to_string().starts_with('_')
         } else {
-            (true, String::new())
-        }
+            false
+        };
+        let b_is_public = if let Item::Fn(func) = b {
+            !func.sig.ident.to_string().starts_with('_')
+        } else {
+            false
+        };
+        a_is_public.cmp(&b_is_public)
     });
 }
