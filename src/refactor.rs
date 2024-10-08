@@ -1,4 +1,4 @@
-use syn::{File, Item, Ident, Stmt, Expr, BinOp, visit_mut::Visit, spanned::Spanned};
+use syn::{File, Item, Ident, Stmt, Expr, BinOp, visit_mut::Visit};
 use std::collections::{HashMap, HashSet};
 use crate::utils::{read_code, parse_code};
 
@@ -14,13 +14,13 @@ pub fn refactor_code(file_path: &str) -> Result<String, &'static str> {
 
     let mut dead_code_remover = DeadCodeRemover::default();
     dead_code_remover.mark_used_functions(&file);
-    dead_code_remover.visit_file_mut(&mut file);
     dead_code_remover.remove_unused_functions(&mut file);
 
     simplify_expressions(&mut file);
     reorder_functions(&mut file);
 
-    Ok(quote::quote!(#file).to_string())
+    let refactored_code = quote::quote!(#file).to_string();
+    Ok(refactored_code)
 }
 
 // --- Identifier Renamer ---
@@ -36,25 +36,23 @@ impl IdentifierRenamer {
             used_identifiers: HashSet::new(),
         }
     }
-
+    
     fn generate_unique_name(&mut self, base_name: &str) -> String {
         let mut new_name = base_name.to_string();
         let mut counter = 1;
-        while self.used_identifiers.contains(&new_name) {
+        while !self.used_identifiers.insert(new_name.clone()) {
             new_name = format!("{}_{}", base_name, counter);
             counter += 1;
         }
-        self.used_identifiers.insert(new_name.clone());
         new_name
     }
 }
 
 impl VisitMut for IdentifierRenamer {
     fn visit_ident_mut(&mut self, ident: &mut Ident) {
-        let ident_str = ident.to_string();
         let new_name = self.rename_map
-            .entry(ident_str.clone())
-            .or_insert_with(|| self.generate_unique_name(&ident_str));
+            .entry(ident.to_string())
+            .or_insert_with(|| self.generate_unique_name(&ident.to_string()));
         *ident = Ident::new(new_name, ident.span());
     }
 }
@@ -68,26 +66,13 @@ struct FunctionExtractor {
 impl VisitMut for FunctionExtractor {
     fn visit_item_fn_mut(&mut self, func: &mut syn::ItemFn) {
         if func.block.stmts.len() > 10 {
-            let new_func = self.extract_function(func);
+            let new_func_name = format!("{}_extracted", func.sig.ident);
+            let new_func: syn::ItemFn = syn::parse_quote! {
+                #func.vis fn #new_func_name() #func.block
+            };
+            func.block.stmts = vec![syn::parse_quote!(#new_func_name());];
             self.extracted_functions.push(Item::Fn(new_func));
         }
-    }
-
-    fn extract_function(&self, func: &mut syn::ItemFn) -> syn::ItemFn {
-        let name = func.sig.ident.to_string();
-        let new_func_name = format!("{}_extracted", name);
-        let new_func = syn::ItemFn {
-            attrs: func.attrs.clone(),
-            vis: func.vis.clone(),
-            sig: syn::Signature {
-                ident: Ident::new(&new_func_name, func.sig.ident.span()),
-                ..func.sig.clone()
-            },
-            block: Box::new(func.block.clone()),
-        };
-        func.block.stmts.clear();
-        func.block.stmts.push(syn::parse_quote! { #new_func_name(); });
-        new_func
     }
 
     fn visit_file_mut(&mut self, file: &mut File) {
@@ -104,66 +89,82 @@ struct DeadCodeRemover {
 
 impl DeadCodeRemover {
     fn mark_used_functions(&mut self, file: &File) {
-        syn::visit::visit_file(self, file);
+        for item in &file.items {
+            if let Item::Fn(func) = item {
+                self.visit_block(&func.block);
+            }
+        }
+    }
+
+    fn visit_block(&mut self, block: &syn::Block) {
+        for stmt in &block.stmts {
+            if let Stmt::Expr(Expr::Call(call_expr)) = stmt {
+                if let Expr::Path(expr_path) = &*call_expr.func {
+                    if let Some(ident) = expr_path.path.get_ident() {
+                        self.used_functions.insert(ident.to_string());
+                    }
+                }
+            }
+        }
     }
 
     fn remove_unused_functions(&mut self, file: &mut File) {
-        file.items.retain(|item| match item {
-            Item::Fn(func) => self.used_functions.contains(&func.sig.ident.to_string()),
-            _ => true,
+        file.items.retain(|item| {
+            matches!(item, Item::Fn(func) if self.used_functions.contains(&func.sig.ident.to_string()))
         });
     }
 }
 
-impl<'ast> syn::visit::Visit<'ast> for DeadCodeRemover {
-    fn visit_expr_path(&mut self, expr_path: &'ast syn::ExprPath) {
-        if let Some(ident) = expr_path.path.get_ident() {
-            self.used_functions.insert(ident.to_string());
-        }
+impl VisitMut for DeadCodeRemover {
+    fn visit_item_fn_mut(&mut self, func: &mut syn::ItemFn) {
+        self.used_functions.insert(func.sig.ident.to_string());
+        syn::visit_mut::visit_item_fn_mut(self, func);
     }
 }
 
 // --- Expression Simplification ---
 fn simplify_expressions(file: &mut File) {
-    let mut simplifier = ExpressionSimplifier;
-    simplifier.visit_file_mut(file);
-}
-
-struct ExpressionSimplifier;
-
-impl VisitMut for ExpressionSimplifier {
-    fn visit_expr_binary_mut(&mut self, expr: &mut syn::ExprBinary) {
-        if let (Expr::Lit(left_lit), Expr::Lit(right_lit)) = (&*expr.left, &*expr.right) {
-            if let (syn::Lit::Int(left_int), syn::Lit::Int(right_int)) = (&left_lit.lit, &right_lit.lit) {
-                if let Ok(result) = self.evaluate_binary_op(expr, left_int, right_int) {
-                    *expr = syn::parse_quote! { #result };
+    for item in &mut file.items {
+        if let Item::Fn(func) = item {
+            for stmt in &mut func.block.stmts {
+                if let Stmt::Expr(Expr::Binary(expr)) = stmt {
+                    simplify_binary_expression(expr);
                 }
             }
         }
     }
 }
 
-impl ExpressionSimplifier {
-    fn evaluate_binary_op(&self, expr: &syn::ExprBinary, left: &syn::LitInt, right: &syn::LitInt) -> Result<i64, ()> {
-        let left_value = left.base10_parse::<i64>().map_err(|_| ())?;
-        let right_value = right.base10_parse::<i64>().map_err(|_| ())?;
-        match expr.op {
-            BinOp::Add(_) => Ok(left_value + right_value),
-            BinOp::Sub(_) => Ok(left_value - right_value),
-            BinOp::Mul(_) => Ok(left_value * right_value),
-            BinOp::Div(_) if right_value != 0 => Ok(left_value / right_value),
-            _ => Err(()),
+fn simplify_binary_expression(expr: &mut syn::ExprBinary) {
+    if let (Expr::Lit(left), Expr::Lit(right)) = (&*expr.left, &*expr.right) {
+        if let (syn::Lit::Int(left_int), syn::Lit::Int(right_int)) = (&left.lit, &right.lit) {
+            if let Some(result) = evaluate_binary_expr(left_int, right_int, &expr.op) {
+                *expr.left = Box::new(Expr::Lit(syn::ExprLit {
+                    attrs: vec![],
+                    lit: syn::Lit::Int(syn::LitInt::new(&result.to_string(), expr.span())),
+                }));
+                *expr.right = Box::new(syn::Expr::Lit(syn::parse_quote!(0)));
+            }
         }
+    }
+}
+
+fn evaluate_binary_expr(left: &syn::LitInt, right: &syn::LitInt, op: &BinOp) -> Option<i64> {
+    let left_val = left.base10_parse::<i64>().ok()?;
+    let right_val = right.base10_parse::<i64>().ok()?;
+    match op {
+        BinOp::Add(_) => Some(left_val + right_val),
+        BinOp::Sub(_) => Some(left_val - right_val),
+        BinOp::Mul(_) => Some(left_val * right_val),
+        BinOp::Div(_) if right_val != 0 => Some(left_val / right_val),
+        _ => None,
     }
 }
 
 // --- Function Reordering ---
 fn reorder_functions(file: &mut File) {
-    file.items.sort_by_key(|item| {
-        if let Item::Fn(func) = item {
-            func.sig.ident.to_string().starts_with('_')
-        } else {
-            false
-        }
+    file.items.sort_by_key(|item| match item {
+        Item::Fn(func) => !func.sig.ident.to_string().starts_with('_'),
+        _ => true,
     });
 }
