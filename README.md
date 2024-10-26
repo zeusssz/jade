@@ -1,4 +1,4 @@
-# Jade
+![jade](https://github.com/user-attachments/assets/5bf7e97d-fd61-4683-b460-8833b0a889f8)
 
 Jade is a Rust code refactoring tool designed to enhance code quality and streamline development workflows. It provides functionalities for refactoring Rust code, analyzing files, and simulating code metrics to help developers maintain and improve their codebases efficiently.
 
